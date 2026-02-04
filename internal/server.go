@@ -19,6 +19,10 @@ import (
 type Config struct {
 	// logger
 	Logger *logrus.Logger
+	// ParentNodeLabel is a node label key used to identify child nodes
+	// belonging to a parent node. The label value must match the parent
+	// node name. If empty, child node drain/uncordon is disabled.
+	ParentNodeLabel string
 }
 
 // Server implements the FleetLock protocol.
@@ -29,8 +33,9 @@ type Server struct {
 	metrics *metrics
 
 	// Kubernetes
-	namespace  string
-	kubeClient kubernetes.Interface
+	namespace       string
+	kubeClient      kubernetes.Interface
+	parentNodeLabel string
 }
 
 // NewServer returns a new fleetlock Server handler
@@ -71,10 +76,11 @@ func NewServer(config *Config) (http.Handler, error) {
 	}
 
 	s := &Server{
-		log:        config.Logger,
-		metrics:    metrics,
-		namespace:  namespace,
-		kubeClient: kubeClient,
+		log:             config.Logger,
+		metrics:         metrics,
+		namespace:       namespace,
+		kubeClient:      kubeClient,
+		parentNodeLabel: config.ParentNodeLabel,
 	}
 
 	mux := http.NewServeMux()

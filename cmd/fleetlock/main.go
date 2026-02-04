@@ -19,15 +19,17 @@ var (
 
 func main() {
 	flags := struct {
-		address  string
-		logLevel string
-		version  bool
-		help     bool
+		address         string
+		logLevel        string
+		parentNodeLabel string
+		version         bool
+		help            bool
 	}{}
 
 	flag.StringVar(&flags.address, "address", "0.0.0.0:8080", "HTTP listen address")
 	// log levels https://github.com/sirupsen/logrus/blob/master/logrus.go#L36
 	flag.StringVar(&flags.logLevel, "log-level", "info", "Set the logging level")
+	flag.StringVar(&flags.parentNodeLabel, "parent-node-label", "", "Node label key identifying child nodes of a parent (value must be parent node name)")
 	// subcommands
 	flag.BoolVar(&flags.version, "version", false, "Print version and exit")
 	flag.BoolVar(&flags.help, "help", false, "Print usage and exit")
@@ -54,7 +56,8 @@ func main() {
 
 	// HTTP Server
 	config := &fleetlock.Config{
-		Logger: log,
+		Logger:          log,
+		ParentNodeLabel: flags.parentNodeLabel,
 	}
 	server, err := fleetlock.NewServer(config)
 	if err != nil {
