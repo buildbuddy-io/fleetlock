@@ -12,7 +12,7 @@ import (
 )
 
 // DrainNode matches a Zincati request to a node, cordons the node, and evicts
-// its pods.
+// its pods. If a parent node label is configured, child nodes are drained first.
 func (s *Server) DrainNode(ctx context.Context, id string) error {
 	// match Zincati ID to Kubernetes Node
 	node, err := s.matchNode(ctx, id)
@@ -24,10 +24,28 @@ func (s *Server) DrainNode(ctx context.Context, id string) error {
 		Client: s.kubeClient,
 		Logger: s.log,
 	})
+
+	if s.parentNodeLabel != "" {
+		children, err := s.findChildNodes(ctx, node.GetName())
+		if err != nil {
+			return err
+		}
+		for _, child := range children {
+			s.log.WithFields(logrus.Fields{
+				"node":  node.GetName(),
+				"child": child.GetName(),
+			}).Info("fleetlock: draining child node")
+			if err := drainer.Drain(ctx, child.GetName()); err != nil {
+				s.log.Warningf("fleetlock: error draining child node %s: %v", child.GetName(), err)
+			}
+		}
+	}
+
 	return drainer.Drain(ctx, node.GetName())
 }
 
 // UncordonNode uncordons a Kubernetes Node that matches the Zincati request ID.
+// If a parent node label is configured, child nodes are uncordoned after the parent.
 func (s *Server) UncordonNode(ctx context.Context, id string) error {
 	// match Zincati ID to Kubernetes Node
 	node, err := s.matchNode(ctx, id)
@@ -39,7 +57,42 @@ func (s *Server) UncordonNode(ctx context.Context, id string) error {
 		Client: s.kubeClient,
 		Logger: s.log,
 	})
-	return drainer.Uncordon(ctx, node.GetName())
+
+	if err := drainer.Uncordon(ctx, node.GetName()); err != nil {
+		return err
+	}
+
+	if s.parentNodeLabel != "" {
+		children, err := s.findChildNodes(ctx, node.GetName())
+		if err != nil {
+			return err
+		}
+		for _, child := range children {
+			s.log.WithFields(logrus.Fields{
+				"node":  node.GetName(),
+				"child": child.GetName(),
+			}).Info("fleetlock: uncordoning child node")
+			if err := drainer.Uncordon(ctx, child.GetName()); err != nil {
+				s.log.Warningf("fleetlock: error uncordoning child node %s: %v", child.GetName(), err)
+			}
+		}
+	}
+
+	return nil
+}
+
+// findChildNodes returns Kubernetes Nodes labeled as children of the given
+// parent node. Nodes are matched by the configured parentNodeLabel where the
+// label value equals the parent node name.
+func (s *Server) findChildNodes(ctx context.Context, parentName string) ([]v1.Node, error) {
+	selector := fmt.Sprintf("%s=%s", s.parentNodeLabel, parentName)
+	nodes, err := s.kubeClient.CoreV1().Nodes().List(ctx, metav1.ListOptions{
+		LabelSelector: selector,
+	})
+	if err != nil {
+		return nil, err
+	}
+	return nodes.Items, nil
 }
 
 // MatchNode matches a Zincati request ID to a Kubernetes Node.

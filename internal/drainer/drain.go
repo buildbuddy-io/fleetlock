@@ -88,8 +88,8 @@ func (d *drainer) Drain(ctx context.Context, node string) error {
 
 		err := d.evictPod(ctx, pod)
 		if err != nil {
-			d.log.WithFields(fields).Errorf("drainer: error evicting pod: %v", err)
-			return err
+			d.log.WithFields(fields).Warningf("drainer: error evicting pod: %v", err)
+			continue
 		}
 		evictedPods = append(evictedPods, pod.GetName())
 	}
