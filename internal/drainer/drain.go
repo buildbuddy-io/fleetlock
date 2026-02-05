@@ -163,6 +163,12 @@ func (d *drainer) getPodsForDeletion(ctx context.Context, node string) ([]v1.Pod
 			continue
 		}
 
+		// don't evict ourselves
+		if strings.HasPrefix(pod.Name, "fleetlock-") {
+			d.log.WithFields(logFields).Debug("skip self")
+			continue
+		}
+
 		pods = append(pods, pod)
 	}
 
